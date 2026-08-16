@@ -1,0 +1,15 @@
+{
+  "name": "fall-line",
+  "version": "1.0.0",
+  "description": "A first-person skiing game. Thirty-two procedural mountains, a fully synthesised soundtrack, and no finish line.",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server -p 8123 -c-1 -o",
+    "vendor": "node tools/vendor.mjs"
+  },
+  "keywords": ["game", "skiing", "threejs", "webgl", "web-audio", "procedural"],
+  "license": "MIT",
+  "devDependencies": {
+    "three": "^0.169.0"
+  }
+}
