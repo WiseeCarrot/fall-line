@@ -64,14 +64,6 @@ moment — it's a single limit for a whole map, and Everest's summit ridge and i
 There is no timer, no race, no gates and no finish line. You pick a mountain and
 you ski down it.
 
-![Perfect North from above — fourteen runs cut through winter hardwood](docs/perfect-north-aerial.png)
-
-*Perfect North from above. The runs are the white ribbons; everything between
-them is bare hardwood on brown ground, which is the whole look of the place.*
-
-![A run at eye level](docs/perfect-north-eye.png)
-![The tree islands close up](docs/perfect-north-trees.png)
-
 ## Running it
 
 The game is plain ES modules with no build step, but it does need to be served
