@@ -266,7 +266,11 @@ export class BaseArea {
     const tex = boardTexture(this.spec.name, [
       `${this.spec.drop} m vertical`,
       `${this.t.trails.length} marked trails`,
-      `${this.spec.features.lifts || 0} lifts running`,
+      // A placed lift list is an array of definitions, not a count — printed
+      // raw it put "[object Object]" on the board of every hand-built resort.
+      // Count the chairs that actually got built instead; the ropetows are
+      // scenery and nobody boards them.
+      `${this.host.lifts.length} lifts running`,
       'Please ski in control.',
     ], '#1e4f7a');
     this.host.disposables.push(tex);

@@ -27,6 +27,18 @@ const ROCK_TILE = 920;
 // obstacle you've cleared shouldn't still knock you over.
 const TREE_HEIGHT = { pine: 11.7, fir: 12.6, cedar: 9.2, bare: 7.4, larch: 10.4 };
 
+/** Pick from `items` with the relative weights in `weights`. */
+function pickWeighted(rng, items, weights) {
+  let total = 0;
+  for (let i = 0; i < items.length; i++) total += weights[i] ?? 1;
+  let r = rng() * total;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i] ?? 1;
+    if (r <= 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
 // ── geometry merge helper ─────────────────────────────────────────
 /** Merge simple geometries into one non-indexed, vertex-coloured buffer. */
 function mergeParts(parts) {
@@ -91,7 +103,7 @@ const mat4 = (px, py, pz, sx = 1, sy = 1, sz = 1, ry = 0) =>
   );
 
 /** Place a limb: a cylinder built along +Y, tilted out and around. */
-const limb = (len, r0, r1, x, y, z, tilt, around, color) => ({
+const limb = (len, r0, r1, x, y, z, tilt, around, color, snowTint = 0) => ({
   geo: new THREE.CylinderGeometry(r1, r0, len, 4),
   matrix: new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
@@ -99,6 +111,7 @@ const limb = (len, r0, r1, x, y, z, tilt, around, color) => ({
     new THREE.Vector3(1, 1, 1),
   ).multiply(new THREE.Matrix4().makeTranslation(0, len / 2, 0)),
   color,
+  snowTint,
 });
 
 // ── tree species ──────────────────────────────────────────────────
@@ -169,9 +182,16 @@ const SPECIES = {
    */
   bare: {
     build: () => {
-      const wood = 0x4b4038;
+      // Bark, at the value it reads from across a valley rather than the value
+      // it reads from arm's length. Wet oak bark really is near-black, but a
+      // hillside of it at six-metre spacing aggregates to a black mass, and the
+      // woods on this hill are the lightest thing on it after the snow.
+      const wood = 0x6d5f52;
       const parts = [
-        { geo: new THREE.CylinderGeometry(0.16, 0.42, 7.2, 5), matrix: mat4(0, 3.6, 0), color: wood },
+        {
+          geo: new THREE.CylinderGeometry(0.16, 0.42, 7.2, 5),
+          matrix: mat4(0, 3.6, 0), color: wood, snowTint: 0.22,
+        },
       ];
       const boughs = 7;
       for (let i = 0; i < boughs; i++) {
@@ -179,14 +199,17 @@ const SPECIES = {
         const y = 3.2 + (i % 4) * 0.95;
         const tilt = 0.55 + (i % 3) * 0.18;
         const len = 3.4 - (i % 4) * 0.45;
-        parts.push(limb(len, 0.11, 0.045, 0, y, 0, tilt, around, wood));
+        // Snow on the upper sides of the branches, which is the whole reason a
+        // leafless wood reads pale in winter and not as a stand of dark sticks.
+        // The docstring above has always claimed this; until now nothing set it.
+        parts.push(limb(len, 0.11, 0.045, 0, y, 0, tilt, around, wood, 0.62));
         // a second-order twig off the end of every other bough
         if (i % 2 === 0) {
           const r = Math.sin(tilt) * len;
           parts.push(limb(
             len * 0.6, 0.05, 0.02,
             Math.cos(around) * r, y + Math.cos(tilt) * len, -Math.sin(around) * r,
-            tilt * 0.6, around + 0.5, 0xb9c4d4,
+            tilt * 0.6, around + 0.5, 0xb9c4d4, 0.5,
           ));
         }
       }
@@ -318,7 +341,13 @@ export class Props {
     if (target < 10) return;
 
     const spacing = Math.sqrt(area / target);
-    const treelineY = this.spec.drop * cfg.line;
+    // `line` is the fraction of the drop at which the trees give out, so
+    // line >= 1 means they never do — the whole hill is below treeline and
+    // there is no line to fade toward. Taking it literally instead put the
+    // cutoff at exactly the summit and then thinned the 90 m below it, which
+    // on a 122 m hill is most of the mountain: Perfect North came out bare
+    // from the midstation up, when in life it is wooded to the top.
+    const treelineY = cfg.line >= 1 ? Infinity : this.spec.drop * cfg.line;
     const rng = this.rng;
 
     // tileKey -> kind -> matrices
@@ -339,7 +368,8 @@ export class Props {
         const h = t.heightAt(x, z);
         if (h > treelineY) continue;
         // fade the treeline out rather than cutting a hard line
-        if (h > treelineY - 90 && rng() < (h - (treelineY - 90)) / 90) continue;
+        if (Number.isFinite(treelineY) && h > treelineY - 90
+            && rng() < (h - (treelineY - 90)) / 90) continue;
 
         const groom = t.groomAt(x, z);
         const accept = clamp(1 - groom + cfg.glade * groom, 0, 1);
@@ -356,7 +386,14 @@ export class Props {
         const clump = t.noise.fbm(x / 220, z / 220, 3) * 0.5 + 0.5;
         if (rng() > 0.35 + clump * 0.8) continue;
 
-        const kind = cfg.kinds.length === 1 ? cfg.kinds[0] : rng.pick(cfg.kinds);
+        // `mix` weights the species list. Without it every kind is equally
+        // likely, which is fine for "fir and pine" and wrong for a hardwood
+        // hill with conifers through it: an even split reads as a conifer
+        // forest, because a fir is an opaque cone and a leafless hardwood is a
+        // handful of sticks. The proportion has to be stated to be seen.
+        const kind = cfg.kinds.length === 1 ? cfg.kinds[0]
+          : cfg.mix ? pickWeighted(rng, cfg.kinds, cfg.mix)
+          : rng.pick(cfg.kinds);
         const scale = rng.range(0.62, 1.35) * (kind === 'cedar' ? 1.1 : 1);
         // Trees grow toward vertical, but lean slightly with the slope.
         q.setFromUnitVectors(up, nrm.clone().lerp(up, 0.72).normalize());
@@ -582,7 +619,13 @@ export class Props {
    * work that way: its lifts are where the terrain and the base area put them,
    * they're different lengths, and they have names people give directions by.
    * So `features.lifts` takes either a number or a list of
-   * {name, x, top, bottom, kind}, x being -1..1 across the face.
+   * {name, x, xBase, top, bottom, kind}, x being -1..1 across the face.
+   *
+   * `xBase` is optional and works exactly as it does on a named run: a lift
+   * line is not obliged to hold one lateral position from top to bottom. Real
+   * ones often don't — they're built where the terrain lets you put towers,
+   * and a long chair off a broad face can finish a long way across from where
+   * it started.
    */
   buildLifts() {
     const f = this.spec.features;
@@ -636,9 +679,11 @@ export class Props {
 
   placedLiftLine(line) {
     const t = this.terrain;
+    const lane = (x) => clamp(x * t.halfW, -t.halfW + 40, t.halfW - 40);
     return {
       ...line,
-      laneX: clamp(line.x * t.halfW, -t.halfW + 40, t.halfW - 40),
+      laneX: lane(line.x),
+      laneBotX: lane(line.xBase ?? line.x),
       top: line.top ?? 0.05,
       bottom: line.bottom ?? 0.95,
     };
@@ -655,8 +700,11 @@ export class Props {
     for (let i = 0; i <= towerCount; i++) {
       const f = i / towerCount;
       const z = lerp(zBot, zTop, f);
+      // f runs 0 at the bottom terminal to 1 at the top, so the traverse is
+      // read from the base end up.
+      const lane = lerp(line.laneBotX ?? line.laneX, line.laneX, f);
       // A chair line bows slightly; a tow is pulled dead straight.
-      const x = line.laneX + (tow ? 0 : Math.sin(f * 2.2) * 12);
+      const x = lane + (tow ? 0 : Math.sin(f * 2.2) * 12);
       const ground = t.heightAt(x, z);
       const height = tow ? 2.4 : 9 + Math.sin(f * 5.1) * 2.5;
       towers.push({ x, z, ground, top: ground + height });

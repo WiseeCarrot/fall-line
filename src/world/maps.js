@@ -223,13 +223,17 @@ export const MAPS = [
     difficulty: 'blue',
     blurb: 'A 400-foot hill in southern Indiana that skis far bigger than it reads. All snowmaking, lit until ten, and absolutely packed.',
     seed: 74025,
-    // Built from the hill's own trail map rather than invented. The runs, the
-    // ratings, the five chairs by colour, both parks, the race lane and the
-    // tubing hill are all what the map shows, in the order the map shows them.
+    // Built from the hill's own trail map rather than invented. Every run and
+    // rating, all five chairs by colour, all nine ropetows, both parks, the
+    // race lane, the tubing hill and the base buildings are what that map
+    // draws, where it draws them, at the length it draws them.
     //
     // What a trail map can't give is metres: it's an oblique painted panorama,
     // so every lateral position here is proportional to the drawing, not
     // surveyed. Run order and grouping are right; exact spacing is a reading.
+    // Two things the drawing is unambiguous about and that read as errors are
+    // called out where they're set: the Orange Chair crosses most of the hill,
+    // and the Blue and Green Chairs never reach the top of it.
     //
     // The real hill: 400 ft of vertical over about 100 acres, night skiing,
     // 100% snowmaking. Small numbers everywhere — the design problem is making
@@ -249,82 +253,208 @@ export const MAPS = [
     // pitch and produced counter-slopes you'd coast to a stop on — which a
     // graded, fully snowmade hill simply doesn't have.
     relief: { scale: 380, amp: 7, octaves: 4 },
+    // The hill across the fall line, traced off the drawing's own skyline.
+    // The crest is a knoll left of centre, above where the Red and White
+    // Chairs top out; from there the ground eases down to the left over
+    // Backstage and drops away harder to the right, so The Far Side and the
+    // tubing hill sit a good twenty metres below the summit. Without this the
+    // summit is a level edge 1.3 km wide and the whole map reads as a ramp
+    // rather than as a hill, which is the single biggest reason it did not
+    // look like the picture.
+    crossProfile: [
+      { x: -1.00, dy: -19 },
+      { x: -0.67, dy: -13 },
+      { x: -0.50, dy:  -8 },
+      { x: -0.40, dy:  -6 },
+      { x: -0.30, dy:  -1 },
+      { x: -0.19, dy:   0 },   // the crest
+      { x: -0.09, dy:  -6 },
+      { x:  0.02, dy:  -9 },
+      { x:  0.12, dy: -10 },
+      { x:  0.22, dy: -19 },
+      { x:  0.33, dy: -20 },
+      { x:  0.43, dy: -23 },
+      { x:  0.60, dy: -23 },
+      { x:  1.00, dy: -26 },
+    ],
     // The trail map, run for run, left to right across the face. Difficulties
     // are the hill's own ratings, including the advanced-intermediate tier the
     // map draws as a diamond inside a square. `steep` is scaled from the
     // published slope angles (4.4° on Rehearsal to 24.8° on Hollywood), which
     // is what makes a black actually ski like a black next to a green here.
+    // Lateral positions are read off the drawing by the same projection for
+    // every feature: the painted face spans about 575 px across at the top of
+    // the runs and 350 px at the base, so an icon's pixel x is normalised
+    // against the face width at its own height before being scaled to metres.
+    // Runs, lifts, both parks, the race lane and the base buildings all come
+    // out of that one reading, which is why they interleave the way the map
+    // draws them rather than each being placed by eye.
+    //
+    // Corridor width is set by the tree islands, not by the corridors. On the
+    // drawing the runs and the woods between them split the face roughly 60/40,
+    // and the islands are the whole look of the place — every run is a cut
+    // through timber with hardwood on both sides of you. At 46 m fourteen runs
+    // butt up against each other across the band they occupy and the face
+    // renders as one continuous white sheet with trees only at the far edges,
+    // which is the opposite of what the map shows.
     trails: {
-      width: 46, groom: 1,
+      width: 34, groom: 1,
+      // A cut run through hardwood has a hard edge — the trees start where the
+      // grooming stops. The default 18 m shoulder is sized for a mountain whose
+      // runs sit a hundred metres apart; here it added 36 m of groomed ground
+      // to every 34 m corridor and closed all thirteen gaps.
+      feather: 7,
+      // And let the list use the face it is drawn on. At the default the whole
+      // hill was squeezed into the middle two thirds, which put the runs 58 m
+      // apart centre to centre — narrower than the corridors themselves.
+      spread: { top: 0.94, base: 0.97 },
       runs: [
         // ── the face, summit to base
-        { name: 'Backstage',           diff: 'blue',   x: -0.93, xBase: -0.97, steep: 0.72 },
-        { name: 'Tuff Enuff',          diff: 'blue',   x: -0.80, xBase: -0.85, steep: 1.30 },
-        { name: 'Hollywood',           diff: 'black',  x: -0.66, xBase: -0.72, steep: 1.62 },
-        { name: 'Center Stage',        diff: 'black',  x: -0.54, xBase: -0.58, steep: 1.56 },
-        // A connector, not a run: it leaves the top of the face and traverses
-        // right to the head of the White Chair, losing very little on the way.
-        { name: 'Hoyt Connection',     diff: 'blue',   x: -0.44, xBase: -0.20, top: 0.02, bottom: 0.42, steep: 0.40 },
-        { name: "Clyde's Super Slide", diff: 'blue',   x: -0.31, xBase: -0.36, steep: 1.02 },
-        { name: 'Deception',           diff: 'black',  x: -0.19, xBase: -0.22, steep: 1.50 },
+        { name: 'Backstage',           diff: 'blue',   x: -0.98, xBase: -0.99, steep: 0.72 },
+        { name: 'Tuff Enuff',          diff: 'blue',   x: -0.86, xBase: -0.89, steep: 1.30 },
+        { name: 'Hollywood',           diff: 'black',  x: -0.72, xBase: -0.76, steep: 1.62 },
+        { name: 'Center Stage',        diff: 'black',  x: -0.61, xBase: -0.64, steep: 1.56 },
+        // A connector, not a run. On the map it runs along the very top of the
+        // face — a near-level link across the summit with a ropetow on it, not
+        // a diagonal down the mountain, which is what it used to be here.
+        { name: 'Hoyt Connection',     diff: 'blue',   x: -0.62, xBase: -0.18, top: 0.02, bottom: 0.24, steep: 0.30 },
+        { name: "Clyde's Super Slide", diff: 'blue',   x: -0.38, xBase: -0.41, steep: 1.02 },
+        { name: 'Deception',           diff: 'black',  x: -0.24, xBase: -0.26, steep: 1.50 },
         // Showtime hands over to Lower Showtime at the bench, as on the map.
-        { name: 'Showtime',            diff: 'black',  x: -0.06, xBase:  0.02, bottom: 0.46, steep: 1.46 },
-        { name: 'Lower Showtime',      diff: 'black',  x:  0.02, xBase:  0.10, top: 0.46, steep: 1.10 },
-        { name: 'Encore',              diff: 'black',  x:  0.14, xBase:  0.16, steep: 1.44 },
-        { name: 'Runway',              diff: 'advint', x:  0.27, xBase:  0.29, steep: 0.90 },
-        { name: 'Intermission',        diff: 'advint', x:  0.40, xBase:  0.43, steep: 1.36 },
-        { name: 'Special Effects',     diff: 'advint', x:  0.53, xBase:  0.57, steep: 1.30 },
-        { name: 'The Far Side',        diff: 'blue',   x:  0.72, xBase:  0.78, steep: 0.74 },
+        { name: 'Showtime',            diff: 'black',  x: -0.06, xBase:  0.00, bottom: 0.46, steep: 1.46 },
+        { name: 'Lower Showtime',      diff: 'black',  x:  0.02, xBase:  0.08, top: 0.46, steep: 1.10 },
+        { name: 'Encore',              diff: 'black',  x:  0.22, xBase:  0.22, steep: 1.44 },
+        { name: 'Runway',              diff: 'advint', x:  0.36, xBase:  0.36, steep: 0.90 },
+        { name: 'Intermission',        diff: 'advint', x:  0.56, xBase:  0.54, steep: 1.36 },
+        { name: 'Special Effects',     diff: 'advint', x:  0.70, xBase:  0.68, steep: 1.30 },
+        // The one run the map labels twice, top and bottom, because it is the
+        // whole far shoulder of the hill rather than a cut corridor — so it
+        // gets close to twice the width of anything else on the face.
+        // It also stops short: the map's lower label for it sits well above the
+        // car park, and running it to the plaza would finish it on tarmac.
+        { name: 'The Far Side',        diff: 'blue',   x:  0.86, xBase:  0.84, bottom: 0.76, steep: 0.74, width: 68 },
 
         // ── lower mountain, from the bench down
-        { name: 'The Meadow',          diff: 'blue',   x: -0.10, xBase: -0.06, top: 0.30, steep: 0.94, width: 76 },
-        { name: 'Cat Walk',            diff: 'green',  x:  0.06, xBase:  0.02, top: 0.60, steep: 0.55 },
-        { name: 'Ski Wiz',             diff: 'blue',   x:  0.24, xBase:  0.22, top: 0.54, steep: 0.75 },
-        { name: 'Rehearsal',           diff: 'green',  x:  0.31, xBase:  0.30, top: 0.70, steep: 0.50 },
-        { name: 'Call Back',           diff: 'green',  x:  0.43, xBase:  0.40, top: 0.72, steep: 0.55 },
-        { name: 'Broadway',            diff: 'green',  x:  0.56, xBase:  0.50, top: 0.56, steep: 0.62 },
+        { name: 'The Meadow',          diff: 'blue',   x: -0.20, xBase: -0.16, top: 0.30, steep: 0.94, width: 58 },
+        { name: 'Cat Walk',            diff: 'green',  x: -0.05, xBase: -0.08, top: 0.60, steep: 0.55 },
+        { name: 'Ski Wiz',             diff: 'blue',   x:  0.18, xBase:  0.16, top: 0.54, steep: 0.75 },
+        { name: 'Rehearsal',           diff: 'green',  x:  0.33, xBase:  0.31, top: 0.70, steep: 0.50 },
+        { name: 'Call Back',           diff: 'green',  x:  0.49, xBase:  0.45, top: 0.72, steep: 0.55 },
+        { name: 'Broadway',            diff: 'green',  x:  0.63, xBase:  0.57, top: 0.56, steep: 0.62 },
       ],
     },
     // Bare winter hardwoods with conifers mixed through them, which is what
     // the map draws and what southern Indiana actually has.
-    trees: { density: 1.3, kinds: ['bare', 'fir'], line: 1, glade: 0 },
+    // Dense on purpose, and by a long way the densest map here. The drawing is
+    // a wooded hill with ribbons cut in it, not a snowfield with ornaments —
+    // the islands between the runs are solid timber you cannot see through,
+    // and at the density a big alpine map wants they came out as scattered
+    // dots on open snow. Everything above is unchanged by this; it only fills
+    // ground the corridors already reject.
+    // Four hardwoods to every conifer, because that is the proportion that
+    // *looks* right rather than the proportion in the list: a fir is a solid
+    // cone and a leafless oak is a handful of sticks, so an even split reads
+    // from any distance as a conifer forest with some twigs in it, which is
+    // the wrong hill and the wrong continent.
+    trees: { density: 4.5, kinds: ['bare', 'fir'], mix: [6, 1], line: 1, glade: 0 },
     moguls: { amount: 0.12, wavelength: 16 },
     rocks: 0.02,
     // Runs 60 m apart can't meander 20 m each and stay separate runs.
     wander: 0.5,
-    weather: 'nightresort',
-    horizon: 0.08,   // Ohio River valley: wooded ridges, not the Rockies
+    // The side walls are 88 m of quadratic rise at full strength, which on a
+    // 122 m hill is most of the mountain again standing on end at both ends of
+    // the face — a trough, when the drawing shows a broad hill that simply eases
+    // off to either side. `crossProfile` above already does that shaping, and
+    // does it asymmetrically the way the picture does. This leaves just enough
+    // wall to turn you back at the rope line.
+    boundsRise: 0.28,
+    // Daylight, because the trail map is a daylight picture. This map used to
+    // run at night on the reasoning that the real hill is floodlit until ten,
+    // which is true and which made every other detail on it invisible: under
+    // 'nightresort' the face is a dark silhouette from more than a hundred
+    // metres away, so the runs, the tree islands, the crest and the lift lines
+    // — the whole reason the map is built the way it is — simply cannot be
+    // seen. The floodlights and their poles stay; they just aren't lit.
+    weather: 'bluebird',
+    // Ohio River valley: wooded ridges, not the Rockies. Still low, but not as
+    // low as it was — at 0.08 the nearest ring came out 30 m tall, which from
+    // a 122 m summit sits *below* the skyline and reads as a flat slab parked
+    // behind the lodge. This puts the far ridges at roughly the height of the
+    // hill, which is where the map draws them. Much above this and the ridged
+    // noise starts showing its teeth and you get the Alps.
+    horizon: 0.16,
     bots: 130,       // by a wide margin the busiest hill in the game, which is
     botsMin: 105,    // the single most accurate thing about it
     features: {
       lodge: true, gates: true, floodlights: true,
       hub: 5,          // five connected wings, as the trail map shows
-      // The five chairs by name, in the map's order across the face. x here is
-      // a fraction of the half-width — base-area space, not the narrower band
-      // the runs are laid out in — so each lane threads the gap between two
-      // runs rather than sitting on one.
+      // Every lift the map draws, at the position and the length it draws it.
+      // x is the top of the line and xBase the bottom, both a fraction of the
+      // half-width; the two differ because on this drawing most of these lines
+      // plainly do not hold one lateral position from top to bottom.
+      //
+      // Two things here are worth stating because they read as mistakes and
+      // aren't. The Orange Chair starts beside Deception at the summit and
+      // finishes at the far right of the base, out by Broadway — it crosses
+      // most of the hill, and the map is unambiguous about it. And the Blue
+      // and Green Chairs are not summit lifts at all: their top terminals are
+      // drawn barely half way up, so they serve the lower mountain only.
       lifts: [
-        { name: 'Red Chair',    x: -0.46 },
-        { name: 'White Chair',  x: -0.31 },
-        { name: 'Blue Chair',   x: -0.16 },
-        { name: 'Orange Chair', x:  0.02 },
-        { name: 'Green Chair',  x:  0.21 },
-        // The beginner hill is served by surface lifts, as it is in life.
-        { name: 'Jam Session Tow', x: -0.88, top: 0.78, bottom: 0.96, kind: 'tow' },
-        { name: 'Beginner Carpet', x: -0.79, top: 0.82, bottom: 0.96, kind: 'carpet' },
+        { name: 'Red Chair',    x: -0.39, xBase: -0.54 },
+        { name: 'White Chair',  x: -0.35, xBase: -0.44 },
+        { name: 'Orange Chair', x: -0.17, xBase:  0.53 },
+        { name: 'Blue Chair',   x: -0.29, xBase: -0.31, top: 0.57 },
+        { name: 'Green Chair',  x:  0.11, xBase:  0.30, top: 0.59 },
+        // Every surface lift on the map carries the legend's ropetow symbol —
+        // not one of them is drawn as a carpet, so none is built as one.
+        //
+        // The summit tow drags you along the flat of the Hoyt Connection.
+        { x: -0.20, xBase: -0.12, top: 0.02, bottom: 0.09, kind: 'tow' },
+        // The Jam Session pod, off the left end of the beginner apron.
+        { name: 'Jam Session Tow', x: -0.90, xBase: -0.84, top: 0.60, bottom: 0.76, kind: 'tow' },
+        { x: -0.94, xBase: -0.90, top: 0.64, bottom: 0.78, kind: 'tow' },
+        // Four more strung across the learning zone between Rehearsal and
+        // Call Back. The map names none of them, so neither does this.
+        { x:  0.16, xBase:  0.05, top: 0.87, bottom: 0.95, kind: 'tow' },
+        { x:  0.22, xBase:  0.28, top: 0.88, bottom: 0.96, kind: 'tow' },
+        { x:  0.07, xBase:  0.17, top: 0.93, bottom: 0.99, kind: 'tow' },
+        { x:  0.42, xBase:  0.26, top: 0.95, bottom: 1.0,  kind: 'tow' },
+        // Two on the tubing hill, both hard against its right-hand edge.
+        { x:  0.86, xBase:  0.84, top: 0.60, bottom: 0.75, kind: 'tow' },
+        { x:  0.89, xBase:  0.87, top: 0.62, bottom: 0.75, kind: 'tow' },
       ],
       // Two parks, which is two objects and not one park at two sizes:
-      // Audition out on the face, Jam Session down on the learning area.
+      // Audition out on the face, Jam Session down on the learning apron.
+      // Both used to sit below the ground the base builder actually flattens,
+      // which put the beginner park out on the plaza instead of on the slope.
       park: [
-        { x: -0.30, t0: 0.42, t1: 0.80, jumps: 3, rails: 5, hips: 1, seed: 0x11 },
-        { x: -0.80, t0: 0.70, t1: 0.92, jumps: 2, rails: 3, seed: 0x22 },
+        { x: -0.42, t0: 0.45, t1: 0.72, jumps: 3, rails: 5, hips: 1, seed: 0x11 },
+        { x: -0.88, t0: 0.62, t1: 0.75, jumps: 2, rails: 3, seed: 0x22 },
       ],
       // The real hill runs 25 tubing lanes; a dozen reads the same. On the map
-      // it sits off on the far skier's right, nowhere near the beginner hill.
+      // it sits off on the far skier's right, nowhere near the beginner hill —
+      // right out past The Far Side, which is further over than it was.
       tubing: 12,
-      base: { x: -0.24, learnX: -0.86, lotX: 0.40, tubingX: 0.80 },
+      // Lodge left of centre, Jam Session off the left end, tubing off the
+      // right — all as drawn. The car park is the one piece that can't be:
+      // the map parks it *below* the whole base, and the base builder only
+      // knows how to put it beside the plaza. Out on the right is the least
+      // wrong place for it, because that is the end the map's lots run to,
+      // and it is the only 200 m of the base not already carrying a run.
+      base: { x: -0.30, learnX: -0.88, lotX: 0.66, tubingX: 0.90 },
+      // The snowmaking reservoir, in the bottom-left corner of the drawing —
+      // the largest single thing on the map that wasn't in the game at all.
+      // A hill that makes 100% of its own snow is built around its pond, so
+      // its absence was conspicuous once everything else was in place.
+      pond: { x: -0.88, t0: 0.80, t1: 0.99, halfX: 72, bank: 3.4 },
       // Race training, fenced off between Special Effects and The Far Side.
-      race: { x: 0.40, t0: 0.40, t1: 0.72, gates: 20 },
+      race: { x: 0.49, t0: 0.42, t1: 0.70, gates: 20 },
+      // Last autumn's leaves under the timber. A hill that makes all its own
+      // snow makes it on the runs; the woods between them get whatever fell,
+      // which on this one is not much, so the islands are brown and not white.
+      // This is the single thing that makes the runs read as cut corridors
+      // from any distance rather than as slightly different shades of snow.
+      undergrowth: { color: 0x8d7a55, amount: 0.88 },
       // 100% snowmaking: even the margins are firm. Anywhere near powder
       // depth here and a 6° pitch can't overcome the friction, so drifting a
       // few metres off the corduroy would bring you to a dead stop.

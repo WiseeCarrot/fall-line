@@ -6,11 +6,23 @@ terrain parks and backcountry — with a fully synthesised soundtrack and other
 skiers going about their own runs around you.
 
 One of them, **Perfect North**, is built from the real hill's trail map:
-eighteen named runs in their actual left-to-right order — Hollywood, Center
+twenty named runs in their actual left-to-right order — Hollywood, Center
 Stage, Deception, Clyde's Super Slide, Broadway — each carrying the hill's own
 difficulty rating and a pitch scaled from its published slope angle. 400 ft of
-vertical, five chairs, twelve tubing lanes, bare winter hardwoods instead of
-firs, floodlit until ten, and about 250 people on it.
+vertical, five chairs and nine ropetows at the lengths the map draws them —
+two of those chairs only serve the lower mountain and one crosses most of the
+hill — plus two terrain parks, a race lane, twelve tubing lanes, the snowmaking
+pond, floodlit until ten, and about 250 people on it.
+
+The look of the place is the tree islands, not the runs: on the trail map it is
+a wooded hill with ribbons cut into it, and every run has bare winter hardwood
+on both sides of you. Getting that took three things the rest of the catalogue
+does not need — `trails.feather` to state the shoulder of a cut run outright
+rather than scaling it off the width, `trails.spread` to let the run list use
+the whole face instead of the middle two thirds, and `features.undergrowth` to
+put last autumn's leaves on the ground between the corridors. Without them
+fourteen runs 46 m apart splat into one white sheet, which is the opposite of
+what the map shows.
 
 Maps with a `trails.runs` list build named runs instead of generated ones, so
 the same treatment works for any real hill you have a trail map for.
@@ -51,6 +63,14 @@ moment — it's a single limit for a whole map, and Everest's summit ridge and i
 
 There is no timer, no race, no gates and no finish line. You pick a mountain and
 you ski down it.
+
+![Perfect North from above — fourteen runs cut through winter hardwood](docs/perfect-north-aerial.png)
+
+*Perfect North from above. The runs are the white ribbons; everything between
+them is bare hardwood on brown ground, which is the whole look of the place.*
+
+![A run at eye level](docs/perfect-north-eye.png)
+![The tree islands close up](docs/perfect-north-trees.png)
 
 ## Running it
 

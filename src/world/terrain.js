@@ -158,6 +158,61 @@ export class Terrain {
     for (let iz = 0; iz < this.nz; iz++) {
       this.baseElev[iz] = (this.baseElev[iz] + total) * scale;
     }
+
+    this.buildCrossProfile();
+  }
+
+  /**
+   * The shape of the hill *across* the fall line.
+   *
+   * `pitch` describes one line down the mountain and every map applies it at
+   * every x, so without this a hill is a ramp: the summit is a level edge the
+   * full width of the map and the only lateral variation is isotropic noise.
+   * That is fine for a bowl or a chute, where the run is the terrain. It is
+   * not fine for a broad face read off a trail map, where the crest is plainly
+   * a knoll off to one side and the ground falls away to both ends.
+   *
+   * `spec.crossProfile` is a list of {x, dy}: x is -1..1 across the face, dy
+   * is metres relative to the crest and is therefore never positive — keeping
+   * the maximum at zero means the map's stated vertical stays the truth.
+   *
+   * The offset is strongest at the summit and mostly gone by the base, which
+   * is both what the drawing shows and what a hill does: ridges have shape,
+   * outruns are flat.
+   */
+  buildCrossProfile() {
+    const prof = this.spec.crossProfile;
+    if (!prof || prof.length < 2) { this.crossElev = null; return; }
+
+    const pts = [...prof].sort((a, b) => a.x - b.x);
+    const peak = Math.max(...pts.map((p) => p.dy));
+
+    // Sampled per column once; rawHeight is called a few million times and
+    // cannot afford to walk the list.
+    this.crossElev = new Float32Array(this.nx);
+    for (let ix = 0; ix < this.nx; ix++) {
+      const u = this.xAt(ix) / this.halfW;
+      let dy;
+      if (u <= pts[0].x) dy = pts[0].dy;
+      else if (u >= pts[pts.length - 1].x) dy = pts[pts.length - 1].dy;
+      else {
+        let i = 1;
+        while (i < pts.length - 1 && u > pts[i].x) i++;
+        const a = pts[i - 1], b = pts[i];
+        const f = (u - a.x) / Math.max(1e-6, b.x - a.x);
+        dy = a.dy + (b.dy - a.dy) * (f * f * (3 - 2 * f));
+      }
+      this.crossElev[ix] = dy - peak;
+    }
+  }
+
+  /** Cross-slope offset at an arbitrary x, linearly between columns. */
+  crossAt(x) {
+    if (!this.crossElev) return 0;
+    const f = clamp((x + this.halfW) / this.cellX, 0, this.nx - 1);
+    const i = Math.floor(f);
+    const j = Math.min(this.nx - 1, i + 1);
+    return lerp(this.crossElev[i], this.crossElev[j], f - i);
   }
 
   // ── 2. trail centrelines ────────────────────────────────────────
@@ -205,6 +260,7 @@ export class Terrain {
         width: trails.width,
         widthProfile: trails.widthProfile,
         groom: trails.groom,
+        feather: trails.feather,
         index: i,
       }));
     }
@@ -224,13 +280,21 @@ export class Terrain {
     const usable = this.halfW - trails.width * 0.5 - 30;
     const rng = this.rng;
 
+    // How much of the usable half-width the run list is allowed to occupy, at
+    // the summit and at the base. Runs were kept well inside the boundary rise
+    // because the outermost ones were being laid through the side walls, which
+    // pinch and stall anyone skiing them — but squeezing every run into the
+    // middle two thirds also packs them together, and on a hill with fourteen
+    // of them side by side that is the difference between separate ribbons and
+    // one white sheet. A map that has flattened its own walls can say so.
+    const spreadTop = trails.spread?.top ?? 0.68;
+    const spreadBase = trails.spread?.base ?? 0.80;
+
     trails.runs.forEach((run, i) => {
       const z0 = (run.top ?? 0.04) * this.length;
       const z1 = (run.bottom ?? 0.985) * this.length;
-      // Kept inside the boundary rise — the outermost runs were being laid
-      // through the side walls, which pinch and stall anyone skiing them.
-      const topX = run.x * usable * 0.68;
-      const botX = (run.xBase ?? run.x) * usable * 0.80;
+      const topX = run.x * usable * spreadTop;
+      const botX = (run.xBase ?? run.x) * usable * spreadBase;
 
       const nodes = Math.max(5, Math.round((z1 - z0) / 190));
       const pts = [];
@@ -251,6 +315,7 @@ export class Terrain {
         width: run.width ?? trails.width,
         widthProfile: run.widthProfile ?? trails.widthProfile,
         groom: run.groom ?? trails.groom,
+        feather: run.feather ?? trails.feather,
         steep: run.steep ?? 1,
         name: run.name,
         difficulty: run.diff ?? this.spec.difficulty,
@@ -296,7 +361,16 @@ export class Terrain {
         // Width is resolved per sample, not per trail, so a run can taper.
         const width = trail.widthAt(sampleCount > 0 ? si / sampleCount : 0);
         const half = width * 0.5;
-        const feather = clamp(width * 0.45, 18, 55);
+        // The soft shoulder either side of the corduroy, scaled off the width
+        // so a wide groomer gets a wide edge. That is right for a mountain
+        // whose runs are a hundred metres apart and wrong for one traced off a
+        // trail map: at 34 m wide it still adds 30 m of groomed ground to every
+        // corridor, and runs drawn 58 m apart overlap before the first tree is
+        // placed — fourteen separate ribbons splatting into six blobs, two of
+        // them over 200 m across, which is the white sheet the map exists to
+        // avoid. `trails.feather` states the shoulder outright for hills whose
+        // runs are cut through timber and have an edge you can point at.
+        const feather = trail.feather ?? clamp(width * 0.45, 18, 55);
         const rMask = half + feather;
         // The carve is capped independently of width: past this it isn't a
         // cut trail any more, it's open terrain.
@@ -378,7 +452,12 @@ export class Terrain {
   rawHeight(x, z, reliefScale = 1) {
     const { relief } = this.spec;
     const iz = clamp(Math.round(z / this.cellZ), 0, this.nz - 1);
-    const base = this.baseElev[iz];
+    // Full crown at the summit, a sixth of it left by the base — the ends of
+    // the ridge come down to meet the apron rather than staying banked.
+    const cross = this.crossElev
+      ? this.crossAt(x) * (1 - 0.84 * smoothstep(clamp(z / this.length, 0, 1)))
+      : 0;
+    const base = this.baseElev[iz] + cross;
     const s = reliefScale * this.topFade(z);
     const amp = this.reliefAmpAt(iz / Math.max(1, this.nz - 1));
     const n = this.noise.fbm(x / relief.scale, z / relief.scale, relief.octaves);
@@ -488,7 +567,64 @@ export class Terrain {
     // the same object at different sizes.
     if (f.park) for (const park of [].concat(f.park)) this.stampPark(park);
     if (f.lakes) this.stampLakes();
+    if (f.pond) for (const pond of [].concat(f.pond)) this.stampPond(pond);
     if (f.iceField) this.stampIceField(f.iceField);
+  }
+
+  /**
+   * A placed body of water at the foot of the hill.
+   *
+   * `lakes` finds its own tarns in flat benches up the mountain, which is no
+   * use for the thing every snowmaking hill is built around: a reservoir sat
+   * in the corner of the base, in a spot the map names rather than the terrain
+   * chooses. So this one is given {x, t0, t1, halfX} outright.
+   *
+   * It is cut *below* the surrounding ground and iced over rather than merely
+   * flattened, so it reads as water and not as one more piece of apron.
+   */
+  stampPond(pond) {
+    const cx = clamp(pond.x * this.halfW, -this.halfW + 20, this.halfW - 20);
+    const z0 = pond.t0 * this.length;
+    const z1 = pond.t1 * this.length;
+    const cz = (z0 + z1) / 2;
+    const halfX = pond.halfX ?? 90;
+    const halfZ = (z1 - z0) / 2;
+    const bank = pond.bank ?? 3.2;      // metres the surface sits below the bank
+    const feather = 26;
+
+    // Surface height: the lowest ground around the rim, minus the bank. Taking
+    // the lowest rather than the centre stops a pond on sloping ground from
+    // standing proud of its own downhill shore.
+    let surface = Infinity;
+    for (let a = 0; a < 16; a++) {
+      const ang = (a / 16) * Math.PI * 2;
+      surface = Math.min(surface, this.heightAt(cx + Math.cos(ang) * halfX, cz + Math.sin(ang) * halfZ));
+    }
+    surface -= bank;
+
+    const ix0 = Math.max(0, Math.floor((cx - halfX - feather + this.halfW) / this.cellX));
+    const ix1 = Math.min(this.nx - 1, Math.ceil((cx + halfX + feather + this.halfW) / this.cellX));
+    const iz0 = Math.max(0, Math.floor((cz - halfZ - feather) / this.cellZ));
+    const iz1 = Math.min(this.nz - 1, Math.ceil((cz + halfZ + feather) / this.cellZ));
+
+    for (let iz = iz0; iz <= iz1; iz++) {
+      const dz = Math.abs(this.zAt(iz) - cz);
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const dx = Math.abs(this.xAt(ix) - cx);
+        // Elliptical, so the shore is a curve rather than a rectangle.
+        const d = Math.hypot(dx / halfX, dz / halfZ);
+        if (d > 1 + feather / Math.min(halfX, halfZ)) continue;
+        const w = d <= 1 ? 1 : 1 - smoothstep(clamp((d - 1) / (feather / Math.min(halfX, halfZ)), 0, 1));
+        if (w <= 0) continue;
+        const i = this.idx(ix, iz);
+        this.height[i] = lerp(this.height[i], surface, w);
+        if (d < 1) {
+          this.ice[i] = Math.max(this.ice[i], 1 - smoothstep(clamp((d - 0.72) / 0.28, 0, 1)));
+          this.groom[i] = 0;
+        }
+      }
+    }
+    this.parkFeatures.lakes.push({ x: cx, z: cz, r: Math.min(halfX, halfZ), y: surface });
   }
 
   /**
@@ -1202,6 +1338,21 @@ export class Terrain {
     const tmp = new THREE.Color();
     const nrm = new THREE.Vector3();
 
+    // Leaf litter and scrub showing through the snow off-piste.
+    //
+    // A snowmaking hill only makes snow where it grooms. Between the cut runs
+    // the ground is whatever the weather left on last autumn's leaves, and on a
+    // hardwood hill that is brown — which is exactly how a trail map draws the
+    // woods, and the reason the islands between the runs are legible on one at
+    // all. Without this the timber is bare trunks standing on white, the ground
+    // under them is the same colour as the corduroy beside them, and a face cut
+    // into fourteen separate runs still reads as one open snowfield.
+    const under = this.spec.features.undergrowth;
+    const underCol = under ? new THREE.Color(under.color ?? 0x7d6b4f) : null;
+    const underAmt = under ? (under.amount ?? 0.55) : 0;
+    const litterShade = new THREE.Color(0x413826);
+    const shadeCol = new THREE.Color();
+
     // Strata: some mountains have rock of a different colour at a particular
     // height. Everest's Yellow Band is a seam of pale limestone at ~7,600 m
     // that you can pick out from kilometres away.
@@ -1247,7 +1398,33 @@ export class Terrain {
         const shade = clamp((1 - nrm.y) * 2.2, 0, 1) * 0.42
                     + mottle * 0.14
                     + clamp(-curv, 0, 1) * 0.5;
-        tmp.copy(g > 0.02 ? groomed : snow).lerp(snowShade, clamp(shade, 0, 1));
+        // How much bare ground shows here. Patchy on the same clumping field
+        // the trees are scattered with, so the brown lands where the woods are
+        // rather than evenly over every metre the groomer missed.
+        let litter = 0;
+        if (underCol && g < 0.5) {
+          const clump = clamp(this.noise.fbm(pos[o] / 220, pos[o + 2] / 220, 3) * 0.5 + 0.5, 0, 1);
+          // The clump only modulates the tint, it doesn't gate it: bare ground
+          // between the runs is bare everywhere, thicker where the woods are
+          // thicker. Letting it run down to a third turned the average mix into
+          // a light wash that read as blue-grey snow.
+          litter = clamp((1 - g * 2) * underAmt * (0.62 + clump * 0.5) * (1 - this.paved[i]), 0, 1);
+        }
+        tmp.copy(g > 0.02 ? groomed : snow);
+        if (litter > 0.01) tmp.lerp(underCol, litter);
+        // Snow in shadow goes blue, because it is lit by the sky rather than
+        // the sun. Leaf litter in shadow just goes dark — running it through
+        // the same blue put the woods at a flat grey barely distinguishable
+        // from the corduroy, which defeats the point of colouring them at all.
+        //
+        // Most of `shade` is backed off under litter as well, and the curvature
+        // term is the reason. That term exists because a near-white surface
+        // shows no shape under diffuse light, so hollows have to be tinted by
+        // hand — brown ground has its own albedo variation and needs none of
+        // it. Left at full strength it swamped the tint: off-piste averaged a
+        // flat grey whatever colour it was mixed from.
+        tmp.lerp(litter > 0.01 ? shadeCol.copy(snowShade).lerp(litterShade, litter) : snowShade,
+                 clamp(shade, 0, 1) * (1 - litter * 0.82));
         if (curv > 0) tmp.offsetHSL(0, 0, curv * 0.07);
         if (r > 0.01) {
           const base = bandCol || (mottle > 0.5 ? rockCol : rockCol2);
