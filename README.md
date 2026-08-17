@@ -1,5 +1,7 @@
 # Fall Line
 
+**[▶ Play it in the browser](https://wiseecarrot.github.io/fall-line/)** — no install, no build step.
+
 A first-person skiing game that runs in the browser. Thirty-two procedurally
 generated mountains — full resorts, groomed trails, black diamond chutes,
 terrain parks and backcountry — with a fully synthesised soundtrack and other
